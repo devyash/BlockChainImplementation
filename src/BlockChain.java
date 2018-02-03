@@ -1,24 +1,22 @@
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
-import com.sun.xml.internal.bind.v2.schemagen.xmlschema.List;
+
 
 public class BlockChain {
-	HashMap<String,Integer> account;
-	HashMap<String, List> transactionsinput;
-	HashMap<String, List> transactionsoutput;
-	boolean firstTransaction;
+	public HashMap<String,Integer> wallet;
+	public LinkedHashMap<String, Transaction> block;
+	public boolean firstTransaction;
 	
 	BlockChain(){
-		this.account = new HashMap();
-		this.transactionsinput = new HashMap();
-		this.transactionsoutput = new HashMap();
+		this.wallet = new HashMap<String, Integer>();
+		this.block = new LinkedHashMap<String, Transaction>();
 		this.firstTransaction=true;
 	}
 	
 	public void whipeBlockChain(){
-		this.account = new HashMap();
-		this.transactionsinput = new HashMap();
-		this.transactionsoutput = new HashMap();
+		this.wallet = new HashMap<String, Integer>();
+		this.block = new LinkedHashMap<String, Transaction>();;
 		this.firstTransaction = true;
 	}
 }

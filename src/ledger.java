@@ -6,6 +6,6 @@ public class ledger {
 		boolean verboseMode = false;
 		InteractiveMode im = new InteractiveMode();
 		BlockChain bc = new BlockChain();
-		im.showScreen(bc,interactiveMode,verboseMode);
+		im.showScreen(bc, interactiveMode, verboseMode);
 	}
 }
