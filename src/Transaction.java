@@ -48,6 +48,8 @@ public class Transaction {
 		try {
 			input = transaction.split(";");
 			txid = input[0].trim();
+			if(txid.length()!=8)
+				throw new Exception();
 			M = Integer.parseInt(input[1].trim());
 			N = Integer.parseInt(input[3].trim());
 			utxos = new LinkedList<UTXO>();
@@ -80,6 +82,7 @@ public class Transaction {
 		} catch (Exception e) {
 //			System.out.println(e+": "+e.getStackTrace());
 			System.out.println("Error: Invalid Format of Transaction - " + transaction);
+			return null;
 		}
 
 		return new Transaction(txid, oldTxid, oldTxidUtxo, M, N, utxos);
@@ -108,6 +111,8 @@ public class Transaction {
 	}
 
 	public static boolean executeTransaction(Transaction t, BlockChain bc, boolean verboseMode) {
+		if (t == null || bc == null)
+			return false;
 		if(verifyTransaction(t, bc, verboseMode)) {
 			bc.block.put(t.txid, t);
 			if(t.oldTxid.length()!=0) {

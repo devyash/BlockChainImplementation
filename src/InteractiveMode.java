@@ -7,16 +7,19 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class InteractiveMode {
-
+	
 	public void showScreen(BlockChain bc, boolean interactiveMode, boolean verboseMode) throws IOException {
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 		String fileName = "";
+		boolean displayOnce = true;
 		while (true) {
-			if (interactiveMode) {
+			if(displayOnce && interactiveMode) {
 				System.out.println("[F]ile\n" + "[T]ransaction\n" + "[P]rint\n" + "[H]elp\n" + "[D]ump\n" + "[W]ipe\n"
 						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit");
-				System.out.println("Select a command:");
+				displayOnce = false;
 			}
+			if (interactiveMode) 
+				System.out.println("Select a command:");
 			String input = null;
 			input = br.readLine();
 			switch (input.toUpperCase()) {
@@ -31,6 +34,15 @@ public class InteractiveMode {
 			case "T":
 				if (interactiveMode) {
 					System.out.println("Enter Transaction: ");
+				}
+				String line = br.readLine();
+				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
+				if(Transaction.executeTransaction(transaction,bc,verboseMode)) {
+					System.out.println(transaction.txid+" : good");
+				}
+				else {
+					if(transaction != null)
+						System.out.println(transaction.txid+" : bad");
 				}
 				break;
 			case "P":
@@ -67,6 +79,8 @@ public class InteractiveMode {
 				break;
 			case "I":
 				interactiveMode = !interactiveMode;
+				displayOnce = true;
+				
 				break;
 			case "V":
 				verboseMode = !verboseMode;
@@ -74,7 +88,7 @@ public class InteractiveMode {
 			case "B":
 				System.out.println("Supply username:");
 				String username = br.readLine().trim();
-				System.out.println("Current Balance: "+bc.wallet.get(username));
+				System.out.println(username+" has "+ bc.wallet.get(username));
 				break;
 			case "E":
 				System.out.println("Good-bye");
@@ -95,8 +109,8 @@ public class InteractiveMode {
 		try {
 			FileWriter fw = new FileWriter(f);
 			fw.write(Transactions);
-//			fw.flush();
-//		    fw.close();
+			fw.flush();
+		    fw.close();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			System.out.println("Error: file "+fileName+" cannot be opened for writing”");
