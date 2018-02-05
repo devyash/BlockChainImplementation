@@ -7,18 +7,18 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class InteractiveMode {
-	
+
 	public void showScreen(BlockChain bc, boolean interactiveMode, boolean verboseMode) throws IOException {
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 		String fileName = "";
 		boolean displayOnce = true;
 		while (true) {
-			if(displayOnce && interactiveMode) {
+			if (displayOnce && interactiveMode) {
 				System.out.println("[F]ile\n" + "[T]ransaction\n" + "[P]rint\n" + "[H]elp\n" + "[D]ump\n" + "[W]ipe\n"
 						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit");
 				displayOnce = false;
 			}
-			if (interactiveMode) 
+			if (interactiveMode)
 				System.out.println("Select a command:");
 			String input = null;
 			input = br.readLine();
@@ -37,12 +37,11 @@ public class InteractiveMode {
 				}
 				String line = br.readLine();
 				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
-				if(Transaction.executeTransaction(transaction,bc,verboseMode)) {
-					System.out.println(transaction.txid+" : good");
-				}
-				else {
-					if(transaction != null)
-						System.out.println(transaction.txid+" : bad");
+				if (Transaction.executeTransaction(transaction, bc, verboseMode)) {
+					System.out.println(transaction.txid + " : good");
+				} else {
+					if (transaction != null)
+						System.out.println(transaction.txid + " : bad");
 				}
 				break;
 			case "P":
@@ -71,16 +70,18 @@ public class InteractiveMode {
 			case "D":
 				fileName = br.readLine().trim();
 				writeToFile(Transaction.printAllTransaction(bc, verboseMode), fileName);
-				if(verboseMode)
+				if (verboseMode)
 					System.out.println("Finished!");
 				break;
 			case "W":
 				bc.whipeBlockChain();
+				if (verboseMode)
+					System.out.println("Wiped!");
 				break;
 			case "I":
 				interactiveMode = !interactiveMode;
 				displayOnce = true;
-				
+
 				break;
 			case "V":
 				verboseMode = !verboseMode;
@@ -88,7 +89,7 @@ public class InteractiveMode {
 			case "B":
 				System.out.println("Supply username:");
 				String username = br.readLine().trim();
-				System.out.println(username+" has "+ bc.wallet.get(username));
+				System.out.println(username + " has " + bc.wallet.get(username));
 				break;
 			case "E":
 				System.out.println("Good-bye");
@@ -103,20 +104,18 @@ public class InteractiveMode {
 	}
 
 	private void writeToFile(String Transactions, String fileName) {
-		File f =  new File(fileName);
-		if(!f.exists() || !f.canWrite())
-			System.out.println("Error: file "+fileName+" cannot be opened for writing”");
+		File f = new File(fileName);
+		if (!f.exists() || !f.canWrite())
+			System.out.println("Error: file " + fileName + " cannot be opened for writing”");
 		try {
 			FileWriter fw = new FileWriter(f);
 			fw.write(Transactions);
 			fw.flush();
-		    fw.close();
+			fw.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			System.out.println("Error: file "+fileName+" cannot be opened for writing”");
-			e.printStackTrace();
+			System.out.println("Error: file " + fileName + " cannot be opened for writing”");
 		}
-		
+
 	}
 
 	private void readFile(String fileName, boolean verboseMode, BlockChain bc) throws IOException {
@@ -126,16 +125,15 @@ public class InteractiveMode {
 			br = new BufferedReader(new FileReader(fileName));
 			String line;
 			while ((line = br.readLine()) != null) {
-				if(line.length()<8)
+				if (line.length() < 8)
 					break;
 				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
-				if(verboseMode)
+				if (verboseMode)
 					System.out.println(line);
-				if(Transaction.executeTransaction(transaction,bc,verboseMode)) {
-					System.out.println(transaction.txid+" : good");
-				}
-				else {
-					System.out.println(transaction.txid+" : bad");
+				if (Transaction.executeTransaction(transaction, bc, verboseMode)) {
+					System.out.println(line.substring(0, 8) + " : good");
+				} else {
+					System.out.println(line.substring(0, 8) + " : bad");
 				}
 			}
 		} catch (FileNotFoundException e) {
@@ -143,5 +141,6 @@ public class InteractiveMode {
 		}
 	}
 
-
 }
+
+// /Users/devyash/eclipse-workspace/SimplifiedBitcoin/transactions.txt
