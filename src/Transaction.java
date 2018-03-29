@@ -16,13 +16,15 @@ public class Transaction {
 	int M;
 	int N;
 	List<UTXO> utxos;
+	String signature;
 
-	Transaction(String txid, List<OldTransaction> oldts, int M, int N, List<UTXO> utxos) {
+	Transaction(String txid, List<OldTransaction> oldts, int M, int N, List<UTXO> utxos, String signature) {
 		this.txid = txid;
 		this.oldts = oldts;
 		this.M = M;
 		this.N = N;
 		this.utxos = utxos;
+		this.signature = signature;
 
 	}
 
@@ -48,7 +50,7 @@ public class Transaction {
 
 	}
 
-	public static Transaction parseTransaction(String transaction, boolean verboseMode, BlockChain bc) {
+	public static Transaction parseTransaction(String transaction, boolean verboseMode, BlockChain bc, String signature) {
 		// f2cea539; 0; ; 1; (Alice, 1000)
 		// 4787df35; 1; (f2cea539, 0); 3; (Bob, 150)(Alice, 845)(Gopesh, 5)
 		String[] input = null;
@@ -58,6 +60,7 @@ public class Transaction {
 		List<UTXO> utxos = null;
 		List<OldTransaction> oldts = new LinkedList<OldTransaction>();
 		String outpututxos = "";
+		
 
 		String[] outputList;
 		try {
@@ -113,7 +116,7 @@ public class Transaction {
 			return null;
 		}
 
-		Transaction t = new Transaction(txid, oldts, M, N, utxos);
+		Transaction t = new Transaction(txid, oldts, M, N, utxos,signature);
 		return t;
 	}
 
@@ -128,6 +131,18 @@ public class Transaction {
 		}
 		return sb.toString();
 	}
+	public static String printAllCurrentTransactionWithSignature(BlockChain bc, boolean verboseMode) {
+		StringBuilder sb = new StringBuilder();
+		Iterator itr = bc.currentBlock.entrySet().iterator();
+		boolean firstTransaction = true;
+		while (itr.hasNext()) {
+			Map.Entry curr = (Map.Entry) itr.next();
+			Transaction ct = (Transaction) curr.getValue();
+			if(ct.signature!=null && ct.signature.length()>2)
+				sb.append(ct.toString()).append("\r\n").append(ct.signature).append("\r\n");
+		}
+		return sb.toString();
+	}
 
 	public static boolean executeTransaction(Transaction t, BlockChain bc, boolean verboseMode) {
 		if (t == null || bc == null)
@@ -135,21 +150,26 @@ public class Transaction {
 		if (verifyTransaction(t, bc, verboseMode)) {
 			t = verifyAndChangeTransactionId(t,bc,verboseMode);
 			bc.block.put(t.txid, t);
-			for(OldTransaction oldt : t.oldts) {
-				Transaction prevT = bc.block.get(oldt.txid);
-				UTXO prevUtxo = prevT.utxos.get(oldt.pos);
-				prevUtxo.spent = true;
-				bc.wallet.put(prevUtxo.account, bc.wallet.get(prevUtxo.account) - prevUtxo.value);
-			}
-			for (UTXO utxo : t.utxos) {
-				if (bc.wallet.containsKey(utxo.account)) {
-					bc.wallet.put(utxo.account, bc.wallet.get(utxo.account) + utxo.value);
-				} else
-					bc.wallet.put(utxo.account, utxo.value);
-			}
+			bc.currentBlock.put(t.txid, t);
+			updateWallet(t,bc);
 			return true;
 		}
 		return false;
+	}
+
+	static void updateWallet(Transaction t, BlockChain bc) {
+		for(OldTransaction oldt : t.oldts) {
+			Transaction prevT = bc.block.get(oldt.txid);
+			UTXO prevUtxo = prevT.utxos.get(oldt.pos);
+			prevUtxo.spent = true;
+			bc.wallet.get(prevUtxo.account).value -= prevUtxo.value;
+		}
+		for (UTXO utxo : t.utxos) {
+			if (bc.wallet.containsKey(utxo.account)) {
+				bc.wallet.get(utxo.account).value +=utxo.value;
+			} else
+				bc.wallet.put(utxo.account, new Wallet(utxo.account,utxo.value));
+		}
 	}
 
 	private static boolean verifyTransaction(Transaction t, BlockChain bc, boolean verboseMode) {

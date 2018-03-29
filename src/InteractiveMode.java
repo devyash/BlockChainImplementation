@@ -5,6 +5,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Iterator;
+import java.util.Map;
 
 public class InteractiveMode {
 
@@ -15,7 +17,7 @@ public class InteractiveMode {
 		while (true) {
 			if (displayOnce && interactiveMode) {
 				System.out.println("[F]ile\n" + "[T]ransaction\n" + "[P]rint\n" + "[H]elp\n" + "[D]ump\n" + "[W]ipe\n"
-						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit");
+						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit\n" +"[O]utput transaction block\n");
 				displayOnce = false;
 			}
 			if (interactiveMode)
@@ -36,7 +38,8 @@ public class InteractiveMode {
 					System.out.println("Enter Transaction: ");
 				}
 				String line = br.readLine();
-				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
+				String signature = br.readLine();
+				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc, signature);
 				Transaction.executeTransaction(transaction, bc, true);
 				break;
 			case "P":
@@ -58,6 +61,7 @@ public class InteractiveMode {
 								+ "\n"
 								+ "[B]alance:  Supply username:  (e.g. Alice).  This command prints the current balance of a user.    \n"
 								+ "\n" + "Format of Transactions:\n"
+								+ "[O]utput transaction block: collect all correctly signed transactions \n "
 								+ "<TransID>; M; (<TransID>, <vout>)^M; N; (<AcctID>, <amount>)^N \n"
 								+ "Items in angle brackets are parameters, M and N are whole numbers, and caret M (or N) indicates M (or N) repetitions of the parenthesized pairs. \n"
 								+ "\n" + "");
@@ -69,7 +73,7 @@ public class InteractiveMode {
 					System.out.println("Finished!");
 				break;
 			case "W":
-				bc.whipeBlockChain();
+				bc.wipeBlockChain();
 				if (verboseMode)
 					System.out.println("Wiped!");
 				break;
@@ -84,11 +88,18 @@ public class InteractiveMode {
 			case "B":
 				System.out.println("Supply username:");
 				String username = br.readLine().trim();
-				System.out.println(username + " has " + bc.wallet.get(username));
+				if(bc.wallet.containsKey(username))
+					System.out.println(username + " has " + bc.wallet.get(username).value);
+				else
+					System.out.println(username + " has no account");
 				break;
 			case "E":
 				System.out.println("Good-bye");
 				System.exit(0);
+				break;
+			case "O":
+				System.out.println(Transaction.printAllCurrentTransactionWithSignature(bc, verboseMode));
+				addCurrentBlockToBlockChain(bc);
 				break;
 			default:
 				if(verboseMode)
@@ -97,6 +108,22 @@ public class InteractiveMode {
 			}
 		}
 
+	}
+
+	private void addCurrentBlockToBlockChain(BlockChain bc) {
+		Iterator itr = bc.currentBlock.entrySet().iterator();
+		boolean firstTransaction = true;
+		Block newBlock = new Block();
+		while (itr.hasNext()) {
+			Map.Entry curr = (Map.Entry) itr.next();
+			Transaction ct = (Transaction) curr.getValue();
+			if(ct.signature!=null && ct.signature.length()>2) {
+				newBlock.transactionIds.add(ct.txid);
+				bc.currentBlock.remove(curr);
+				//Transaction.updateWallet(ct,bc);
+			}
+		}
+		bc.blockChain.add(newBlock);
 	}
 
 	private void writeToFile(String Transactions, String fileName) {
@@ -119,11 +146,24 @@ public class InteractiveMode {
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(fileName));
-			String line;
-			while ((line = br.readLine()) != null) {
+			String line,signature,nextLine;
+			boolean isTransaction = true;
+			line = br.readLine();
+			nextLine = line;
+			while (line != null && nextLine !=null) {
+				line = line.replace("//s+", "");
+				line = nextLine;
+				signature = br.readLine();
+				if(isTransaction(signature)) {
+					nextLine = signature;
+					signature = null;
+				}
+				else {
+					nextLine = br.readLine();
+				}
 				if (line.length() < 8)
 					break;
-				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
+				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc, signature);
 				if (verboseMode)
 					System.out.println(line);
 				if (Transaction.executeTransaction(transaction, bc, verboseMode)) {
@@ -135,6 +175,10 @@ public class InteractiveMode {
 		} catch (FileNotFoundException e) {
 			System.err.println("Error: file '" + fileName + "' cannot be opened for reading.");
 		}
+	}
+
+	private boolean isTransaction(String signature) {
+		return signature!=null && signature.length()>8 && (signature.charAt(8)==';');
 	}
 
 }

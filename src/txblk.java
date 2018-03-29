@@ -1,6 +1,6 @@
 import java.io.IOException;
 
-public class ledger {
+public class txblk {
 	public static void main(String[] args) throws IOException {
 		boolean interactiveMode = false;
 		boolean verboseMode = false;
