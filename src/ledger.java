@@ -9,3 +9,7 @@ public class ledger {
 		im.showScreen(bc, interactiveMode, verboseMode);
 	}
 }
+
+// /Users/devyash/eclipse-workspace/SimplifiedBitcoin/transactions.txt
+
+

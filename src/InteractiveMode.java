@@ -37,12 +37,7 @@ public class InteractiveMode {
 				}
 				String line = br.readLine();
 				Transaction transaction = Transaction.parseTransaction(line, verboseMode, bc);
-				if (Transaction.executeTransaction(transaction, bc, verboseMode)) {
-					System.out.println(transaction.txid + " : good");
-				} else {
-					if (transaction != null)
-						System.out.println(transaction.txid + " : bad");
-				}
+				Transaction.executeTransaction(transaction, bc, true);
 				break;
 			case "P":
 				System.out.println(Transaction.printAllTransaction(bc, verboseMode));
@@ -96,7 +91,8 @@ public class InteractiveMode {
 				System.exit(0);
 				break;
 			default:
-				System.out.println("Wrong output selected! Please Type H to see the commands available");
+				if(verboseMode)
+					System.err.println("Wrong output selected! Please Type H to see the commands available");
 				break;
 			}
 		}
@@ -106,14 +102,14 @@ public class InteractiveMode {
 	private void writeToFile(String Transactions, String fileName) {
 		File f = new File(fileName);
 		if (!f.exists() || !f.canWrite())
-			System.out.println("Error: file " + fileName + " cannot be opened for writing”");
+			System.err.println("Error: file " + fileName + " cannot be opened for writing”");
 		try {
 			FileWriter fw = new FileWriter(f);
 			fw.write(Transactions);
 			fw.flush();
 			fw.close();
 		} catch (IOException e) {
-			System.out.println("Error: file " + fileName + " cannot be opened for writing”");
+			System.err.println("Error: file " + fileName + " cannot be opened for writing”");
 		}
 
 	}
@@ -131,13 +127,13 @@ public class InteractiveMode {
 				if (verboseMode)
 					System.out.println(line);
 				if (Transaction.executeTransaction(transaction, bc, verboseMode)) {
-					System.out.println(line.substring(0, 8) + " : good");
+					System.out.println(transaction.txid + ": good");
 				} else {
-					System.out.println(line.substring(0, 8) + " : bad");
+					System.out.println(line.substring(0, 8) + ": bad");
 				}
 			}
 		} catch (FileNotFoundException e) {
-			System.out.println("Error: file '" + fileName + "' cannot be opened for reading.");
+			System.err.println("Error: file '" + fileName + "' cannot be opened for reading.");
 		}
 	}
 

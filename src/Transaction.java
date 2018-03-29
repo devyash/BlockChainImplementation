@@ -10,16 +10,16 @@ import java.util.Map;
 public class Transaction {
 
 	String txid;
-	String oldTxid;
-	int oldTxidUtxo;
+//	String oldTxid;
+//	int oldTxidUtxo;
+	List<OldTransaction> oldts;
 	int M;
 	int N;
 	List<UTXO> utxos;
 
-	Transaction(String txid, String oldTxid, int oldTxidUtxo, int M, int N, List<UTXO> utxos) {
+	Transaction(String txid, List<OldTransaction> oldts, int M, int N, List<UTXO> utxos) {
 		this.txid = txid;
-		this.oldTxid = oldTxid;
-		this.oldTxidUtxo = oldTxidUtxo;
+		this.oldts = oldts;
 		this.M = M;
 		this.N = N;
 		this.utxos = utxos;
@@ -29,11 +29,17 @@ public class Transaction {
 	public String toString() {
 		// 4787df35; 1; (f2cea539, 0); 3; (Bob, 150)(Alice, 845)(Gopesh, 5)
 		String res;
-		if (M == 1)
-			res = this.txid + "; " + this.M + "; " + "(" + this.oldTxid + ", " + this.oldTxidUtxo + ")" + "; " + this.N
-					+ "; ";
-		else
-			res = this.txid + "; " + this.M + "; " + "; " + this.N + "; ";
+		res = this.txid + "; " + this.M + "; ";
+		if(this.M > 0) {
+			if(this.oldts!=null) {
+				for(OldTransaction oldt : this.oldts) {
+					if(oldt.txid!=null && oldt.pos>-1) {
+						res += "("+oldt.txid+", " + oldt.pos + ")";
+					}
+				}
+			}
+		}
+		res+="; " +this.N+ "; ";
 
 		for (UTXO utxo : this.utxos) {
 			res += "(" + utxo.account + ", " + utxo.value + ")";
@@ -47,56 +53,68 @@ public class Transaction {
 		// 4787df35; 1; (f2cea539, 0); 3; (Bob, 150)(Alice, 845)(Gopesh, 5)
 		String[] input = null;
 		String txid = "";
-		String oldTxid = "";
-		int oldTxidUtxo = 0;
 		int M = 0;
 		int N = 0;
 		List<UTXO> utxos = null;
+		List<OldTransaction> oldts = new LinkedList<OldTransaction>();
 		String outpututxos = "";
 
 		String[] outputList;
 		try {
+			if(!transaction.endsWith(")"))
+				throw new Exception();
 			input = transaction.split(";");
 			txid = input[0].trim();
-			if (txid.length() != 8)
-				throw new Exception();
 			M = Integer.parseInt(input[1].trim());
 			N = Integer.parseInt(input[3].trim());
 			utxos = new LinkedList<UTXO>();
+			oldts = new LinkedList<OldTransaction>();
 			outpututxos = input[4].trim();
-
 			outputList = outpututxos.split("\\)");
 
 			// There should be N outputs
-			if (outputList.length != N)
-				throw new Exception();
+			if (outputList.length != N) {
+				throwError(transaction.substring(0,8)+": Error N != Number of output UTXOs",verboseMode);
+			}
 
-			for (int i = 0; i < N; i++) {
+
+			for (int i = 0; i < outputList.length; i++) {
+//				if(!transaction.startsWith("("))
+//					throw new Exception();
 				String oneUTXO = outputList[i].substring(1); // remove '('
 				UTXO utxo = new UTXO(oneUTXO.split(",")[0], Integer.parseInt(oneUTXO.split(",")[1].trim()));
 				utxos.add(utxo);
 			}
 
 			if (bc.firstTransaction) {
-				if (M != 0)
-					throw new Exception();
+				if (M != 0) {
+					throwError(transaction.substring(0,8)+": " +"Error - M != Number of input UTXOs",verboseMode);
+				}
 				bc.firstTransaction = !bc.firstTransaction;
 			} else {
-				oldTxid = input[2].trim().substring(1, input[2].length() - 2).split(",")[0];
-				oldTxidUtxo = Integer
-						.parseInt(input[2].trim().substring(1, input[2].length() - 2).split(",")[1].trim());
-				if (M != 1)
-					throw new Exception();
+				String listOfT=input[2].trim();
+				String []ts=listOfT.split("\\)");
+
+				if (ts.length != M)
+					throwError(transaction.substring(0,8)+": Invalid number of Input UXTO", verboseMode);
+
+				for (int i = 0; i < ts.length ; i++) {
+					String oneOldT = ts[i].substring(1); // remove '('
+					OldTransaction oldt = new OldTransaction(oneOldT.split(",")[0],Integer.parseInt(oneOldT.split(",")[1].trim()));
+					oldts.add(oldt);
+				}
 			}
-			// if(verboseMode)
-			// System.out.println("Parsed: "+transaction);
+
 		} catch (Exception e) {
-			// System.out.println(e+": "+e.getStackTrace());
-			System.out.println("Error: Invalid Format of Transaction - " + transaction);
+			if(transaction.length()>=8)
+				System.err.println(transaction.substring(0,8)+": Transaction format Invalid, Exception: "+e);
+			else
+				System.err.println(transaction+": Transaction format Invalid, Exception: "+e);
 			return null;
 		}
 
-		return new Transaction(txid, oldTxid, oldTxidUtxo, M, N, utxos);
+		Transaction t = new Transaction(txid, oldts, M, N, utxos);
+		return t;
 	}
 
 	public static String printAllTransaction(BlockChain bc, boolean verboseMode) {
@@ -115,17 +133,19 @@ public class Transaction {
 		if (t == null || bc == null)
 			return false;
 		if (verifyTransaction(t, bc, verboseMode)) {
+			t = verifyAndChangeTransactionId(t,bc,verboseMode);
 			bc.block.put(t.txid, t);
-			if (t.oldTxid.length() != 0) {
-				UTXO oldUtxo = bc.block.get(t.oldTxid).utxos.get(t.oldTxidUtxo);
-				// bc.wallet.put(oldUtxo.account,bc.wallet.get(oldUtxo.account)-oldUtxo.value);
-				// //Subtract old value
-				for (UTXO utxo : t.utxos) {
-					if (bc.wallet.containsKey(utxo.account)) {
-						bc.wallet.put(utxo.account, bc.wallet.get(utxo.account) + utxo.value);
-					} else
-						bc.wallet.put(utxo.account, utxo.value);
-				}
+			for(OldTransaction oldt : t.oldts) {
+				Transaction prevT = bc.block.get(oldt.txid);
+				UTXO prevUtxo = prevT.utxos.get(oldt.pos);
+				prevUtxo.spent = true;
+				bc.wallet.put(prevUtxo.account, bc.wallet.get(prevUtxo.account) - prevUtxo.value);
+			}
+			for (UTXO utxo : t.utxos) {
+				if (bc.wallet.containsKey(utxo.account)) {
+					bc.wallet.put(utxo.account, bc.wallet.get(utxo.account) + utxo.value);
+				} else
+					bc.wallet.put(utxo.account, utxo.value);
 			}
 			return true;
 		}
@@ -135,26 +155,25 @@ public class Transaction {
 	private static boolean verifyTransaction(Transaction t, BlockChain bc, boolean verboseMode) {
 		try {
 			if (bc.block.containsKey(t.txid)) {
-				throwError("Error: Transaction Id already exists", verboseMode);
+				throwError(t.txid+": " +"Error - Transaction Id already exists", verboseMode);
 			}
-			 if(!checkSha1(t.toString().substring(0,8),getSha1(t.toString().substring(10))))
-			 {
-//			 System.out.println("TXID"+t.toString().substring(0,8));
-//			 System.out.println("SHA1:"+getSha1(t.toString().substring(10)));
-//			 System.out.println("Line:"+t.toString().substring(10));
-			 throwError("Error: Wrong Transaction ID check Sha1.",verboseMode);
-			 }
-			if (t.oldTxid.length() != 0) {
-				if (!bc.block.containsKey(t.oldTxid)) {
-					throwError("Error: Old Transaction does not exist!", verboseMode);
-				} else if (bc.block.get(t.oldTxid).N < t.oldTxidUtxo) {
-					throwError("Error: Old Transaction UTXO does not exist! ", verboseMode);
-				} else if (getTotalUtxoSum(t) != get1UtxoSum(bc.block.get(t.oldTxid), t.oldTxidUtxo)) {
-					throwError("Error: Invalid Amount of UTXO", verboseMode);
-				} else if (bc.block.get(t.oldTxid).utxos.get(t.oldTxidUtxo).spent) {
-					throwError("Error: UTXO already spent", verboseMode);
+			 int inputSum = 0;
+			 for(OldTransaction oldt : t.oldts) {
+				 if (bc.block.containsKey(oldt.txid)) {
+					 Transaction prevTransaction = bc.block.get(oldt.txid);
+					 inputSum += prevTransaction.utxos.get(oldt.pos).value;
+					if (prevTransaction.N <= oldt.pos ) {
+						throwError(t.txid+": " +"Error Old Transaction UTXO does not exist! ", verboseMode);
+					} else if (prevTransaction.utxos.get(oldt.pos).spent) {
+						throwError(t.txid+": " +"Error - UTXO already spent", verboseMode);
+					}
 				}
-			}
+				 else
+					 throwError(t.txid+": " +"Error - Old Transaction does not exist!", verboseMode);
+			 }
+			 if(getTotalUtxoSum(t) != inputSum && t.M != 0) {
+				 throwError(t.txid+": " +"Error - Input UTXO != output UTXO", verboseMode);
+			 }
 
 		} catch (Exception e) {
 			return false;
@@ -163,6 +182,17 @@ public class Transaction {
 		return true;
 	}
 
+	private static Transaction verifyAndChangeTransactionId(Transaction t, BlockChain bc, boolean verboseMode) {
+		 if(!checkSha1(t.toString().substring(0,8),getSha1(t.toString().substring(10))))
+		 {
+			 try {
+				throwError(t.txid+": " +"Error - Wrong Transaction ID: "+t.txid+". New txid: "+getSha1(t.toString().substring(10)),true);
+			} catch (Exception e) {
+				t.txid = getSha1(t.toString().substring(10));
+			}
+		 }
+		 return t;
+	}
 	private static int getTotalUtxoSum(Transaction t) {
 		int sum = 0;
 		for (UTXO utxo : t.utxos) {
@@ -171,16 +201,12 @@ public class Transaction {
 		return sum;
 	}
 
-	private static int get1UtxoSum(Transaction t, int oldTxidUtxo) {
-		return t.utxos.get(oldTxidUtxo).value;
-	}
 
 	private static void throwError(String message, boolean verboseMode) throws Exception {
 		if (verboseMode)
-			System.out.println(message);
+			System.err.println(message);
 		throw new Exception();
 	}
-	// /Users/devyash/eclipse-workspace/SimplifiedBitcoin/transactions.txt
 
 	public static boolean checkSha1(String txid, String Sha1) {
 		return txid.equals(Sha1);

@@ -9,4 +9,9 @@ public class UTXO {
 		this.value = value;
 		this.spent = false;
 	}
+	
+	@Override
+	public String toString() {
+		return "("+this.account+","+this.value+")";
+	}
 }
