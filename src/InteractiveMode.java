@@ -5,7 +5,10 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 public class InteractiveMode {
@@ -17,7 +20,7 @@ public class InteractiveMode {
 		while (true) {
 			if (displayOnce && interactiveMode) {
 				System.out.println("[F]ile\n" + "[T]ransaction\n" + "[P]rint\n" + "[H]elp\n" + "[D]ump\n" + "[W]ipe\n"
-						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit\n" +"[O]utput transaction block\n");
+						+ "[I]nteractive\n" + "[V]erbose\n" + "[B]alance\n" + "[E]xit\n" +"[O]utput transaction block\n[C]heck transaction signature:\n[R]ead Key File");
 				displayOnce = false;
 			}
 			if (interactiveMode)
@@ -43,7 +46,7 @@ public class InteractiveMode {
 				Transaction.executeTransaction(transaction, bc, true);
 				break;
 			case "P":
-				System.out.println(Transaction.printAllTransaction(bc, verboseMode));
+				System.out.println(Transaction.printAllTransactionNotCommited(bc, verboseMode));
 				break;
 			case "H":
 				System.out.println(
@@ -101,6 +104,36 @@ public class InteractiveMode {
 				System.out.println(Transaction.printAllCurrentTransactionWithSignature(bc, verboseMode));
 				addCurrentBlockToBlockChain(bc);
 				break;
+			case "C":
+				//TODO
+				System.out.println("Supply <transactionID>");
+				String transactionId = br.readLine();
+				try {
+					printGoodOrBadTransaction(transactionId, bc);
+				}
+				catch(Exception e) {
+					System.out.println(e);
+				}
+				System.out.println("supply <transactionID>. The signature of the signed transaction (in the two-line format given above) shall be checked. Output “OK” to stdout if good, else output “Bad” to stdout. If bad, output additional diagnostic information to stderr. ");
+				break;
+			case "R":
+				//TODO
+				System.out.println("Supply <account name> <keyfilename>:");
+				String accountName = "",keyFileName="";
+				try {
+					line = br.readLine();
+					String [] temp = line.split(" ");
+					accountName = temp[0];
+					keyFileName = temp [1];
+					readKeyFile(fileName, accountName,bc);
+					System.out.println("Key: Public key "+accountName+" "+fileName+" read");
+				}
+				catch(Exception e) {
+					System.out.println("Error: Public key "+accountName+" "+fileName+" not read");	
+					e.printStackTrace();
+				}
+					
+				break;
 			default:
 				if(verboseMode)
 					System.err.println("Wrong output selected! Please Type H to see the commands available");
@@ -110,20 +143,69 @@ public class InteractiveMode {
 
 	}
 
+	private void readKeyFile(String fileName, String accountName, BlockChain bc) throws Exception {
+		// Problems include invalid account name (syntactic error), and various errors opening and"
+		//		+ "reading the file that is supposed to contain the key.\n");
+		if(!bc.wallet.containsKey(accountName)) {
+			throw new Exception("Invalid Account Name!");
+		}
+		BufferedReader br = null;
+		br = new BufferedReader(new FileReader(fileName));
+		String line = "";
+		while ((line = br.readLine())!= null) {
+				line = line.replace("//s+", "");
+				bc.wallet.get(accountName).publicKey = line;
+			}
+		br.close();
+	}
+
+	private void printGoodOrBadTransaction(String transactionId, BlockChain bc) throws Exception {
+		// TODO Auto-generated method stub
+		if(!bc.block.containsKey(transactionId)) {
+			throw new Exception("Error: Transaction ID does not exist.");
+		}
+		try {
+		String transaction = bc.block.get(transactionId).toString();
+		String signature = bc.block.get(transactionId).signature;
+		String pubKy = bc.wallet.get(transactionId).publicKey;
+		System.out.println(transaction);
+		System.out.println(signature);
+		if(isCorrectSignature(transaction,signature,pubKy, bc))
+			System.out.println("OK");
+		}
+		catch(Exception e) {
+			System.out.println("Bad");
+			e.printStackTrace();
+		}
+		
+	}
+
+	private boolean isCorrectSignature(String transaction, String signature, String pubKy, BlockChain bc) throws Exception {
+		SHA256RSA obj  = new SHA256RSA();
+		return obj.decrptMessage(signature,pubKy).equals(transaction.substring(9));
+
+	}
+
+
 	private void addCurrentBlockToBlockChain(BlockChain bc) {
+		if(!bc.currentBlock.isEmpty()) {
 		Iterator itr = bc.currentBlock.entrySet().iterator();
 		boolean firstTransaction = true;
 		Block newBlock = new Block();
+		List<String> txidsToRemove = new LinkedList<String>();
 		while (itr.hasNext()) {
 			Map.Entry curr = (Map.Entry) itr.next();
 			Transaction ct = (Transaction) curr.getValue();
 			if(ct.signature!=null && ct.signature.length()>2) {
 				newBlock.transactionIds.add(ct.txid);
-				bc.currentBlock.remove(curr);
-				//Transaction.updateWallet(ct,bc);
+				txidsToRemove.add(ct.txid);
+				Transaction.updateWallet(ct,bc);
 			}
 		}
+		while(!txidsToRemove.isEmpty())
+			bc.currentBlock.remove(txidsToRemove.remove(0));
 		bc.blockChain.add(newBlock);
+		}
 	}
 
 	private void writeToFile(String Transactions, String fileName) {

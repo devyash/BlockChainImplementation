@@ -151,7 +151,28 @@ public class Transaction {
 			t = verifyAndChangeTransactionId(t,bc,verboseMode);
 			bc.block.put(t.txid, t);
 			bc.currentBlock.put(t.txid, t);
-			updateWallet(t,bc);
+			for(OldTransaction oldt : t.oldts) {
+				Transaction prevT = bc.currentBlock.get(oldt.txid);
+				UTXO prevUtxo = prevT.utxos.get(oldt.pos);
+				prevUtxo.spent = true;
+			}
+
+			Transaction prevT;
+			UTXO prevUtxo;
+			String name, prevName = null;
+			for(int i=0;i<t.M;i++){
+				OldTransaction oldt = t.oldts.get(i);
+				prevT = bc.currentBlock.get(oldt.txid);
+				prevUtxo = prevT.utxos.get(oldt.pos);
+				name = prevUtxo.account;
+				if(i==0)
+					prevName=name;
+				if(!prevName.equals(name))
+					return false;
+				prevName = name;
+			}
+
+			
 			return true;
 		}
 		return false;
@@ -161,14 +182,16 @@ public class Transaction {
 		for(OldTransaction oldt : t.oldts) {
 			Transaction prevT = bc.block.get(oldt.txid);
 			UTXO prevUtxo = prevT.utxos.get(oldt.pos);
-			prevUtxo.spent = true;
-			bc.wallet.get(prevUtxo.account).value -= prevUtxo.value;
+			if(bc.wallet.containsKey(prevUtxo.account))
+				bc.wallet.get(prevUtxo.account).value -= prevUtxo.value;
+			else
+				bc.wallet.put(prevUtxo.account, new WalletClass(prevUtxo.account, prevUtxo.value));
 		}
 		for (UTXO utxo : t.utxos) {
 			if (bc.wallet.containsKey(utxo.account)) {
 				bc.wallet.get(utxo.account).value +=utxo.value;
 			} else
-				bc.wallet.put(utxo.account, new Wallet(utxo.account,utxo.value));
+				bc.wallet.put(utxo.account, new WalletClass(utxo.account,utxo.value));
 		}
 	}
 
@@ -256,5 +279,17 @@ public class Transaction {
 		String result = formatter.toString();
 		formatter.close();
 		return result;
+	}
+
+	public static String printAllTransactionNotCommited(BlockChain bc, boolean verboseMode) {
+		StringBuilder sb = new StringBuilder();
+		Iterator itr = bc.currentBlock.entrySet().iterator();
+		boolean firstTransaction = true;
+		while (itr.hasNext()) {
+			Map.Entry curr = (Map.Entry) itr.next();
+			Transaction ct = (Transaction) curr.getValue();
+			sb.append(ct.toString()).append("\n");
+		}
+		return sb.toString();
 	}
 }
