@@ -3,7 +3,7 @@
 
 The functionality of this code is limited to a simple block chain and a wallet. The main aim of this project was to understand the internal workings of Bitcoin and other similar blockchain technologies. The code was written in Java from scratch for a course in Digital currencies.
 
-#Internal structure
+## Internal structure
 
 Instruction
 - Open the wallet application and add your private key
@@ -13,9 +13,12 @@ Instruction
 - Only valid transactions with corrected signature are appened to the blockchain.
 
 
-##Run
+## Run
 - Make sure you have java installed
 - type `make`
 - To run the transaction block `java txlbk`.
 - To run the wallet `java wallet` in another terminal.
 - type `I` to turn on the interative mode.
+-
+-
+- For any help related to this project. Please email me at devyashsanghai@gmail.com
