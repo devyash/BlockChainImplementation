@@ -17,6 +17,7 @@ public class Transaction {
 	int N;
 	List<UTXO> utxos;
 	String signature;
+	boolean validSignature = false;
 
 	Transaction(String txid, List<OldTransaction> oldts, int M, int N, List<UTXO> utxos, String signature) {
 		this.txid = txid;
@@ -117,13 +118,24 @@ public class Transaction {
 		}
 
 		Transaction t = new Transaction(txid, oldts, M, N, utxos,signature);
+		//TODO: validateSignature and set flag
+		updateSignatureValidFlag(t,bc);
+		
 		return t;
+	}
+
+	static void updateSignatureValidFlag(Transaction t, BlockChain bc) {
+		boolean isValidSign = false;
+		try {
+			 isValidSign = SHA256RSA.verifyFromTransactionObject(bc, t);
+		} catch (Exception e) {
+		}
+		t.validSignature = isValidSign;
 	}
 
 	public static String printAllTransaction(BlockChain bc, boolean verboseMode) {
 		StringBuilder sb = new StringBuilder();
 		Iterator itr = bc.block.entrySet().iterator();
-		boolean firstTransaction = true;
 		while (itr.hasNext()) {
 			Map.Entry curr = (Map.Entry) itr.next();
 			Transaction ct = (Transaction) curr.getValue();
@@ -134,14 +146,28 @@ public class Transaction {
 	public static String printAllCurrentTransactionWithSignature(BlockChain bc, boolean verboseMode) {
 		StringBuilder sb = new StringBuilder();
 		Iterator itr = bc.currentBlock.entrySet().iterator();
-		boolean firstTransaction = true;
 		while (itr.hasNext()) {
 			Map.Entry curr = (Map.Entry) itr.next();
 			Transaction ct = (Transaction) curr.getValue();
-			if(ct.signature!=null && ct.signature.length()>2)
+			updateSignatureValidFlag(ct,bc);
+			try {
+				updateSignatureValidFlagForNumberOfAccounts(ct,bc);
+			} catch (Exception e) {
+			}
+		}
+		itr = bc.currentBlock.entrySet().iterator();
+		while (itr.hasNext()) {
+			Map.Entry curr = (Map.Entry) itr.next();
+			Transaction ct = (Transaction) curr.getValue();
+			if(ct.signature!=null && ct.signature.length()>2 && ct.validSignature)
 				sb.append(ct.toString()).append("\r\n").append(ct.signature).append("\r\n");
 		}
 		return sb.toString();
+	}
+
+	static void updateSignatureValidFlagForNumberOfAccounts(Transaction ct, BlockChain bc) throws Exception {
+		if(!InteractiveMode.verifyAccountNames(ct.txid, bc))
+			ct.validSignature=false;
 	}
 
 	public static boolean executeTransaction(Transaction t, BlockChain bc, boolean verboseMode) {
@@ -236,6 +262,7 @@ public class Transaction {
 		 }
 		 return t;
 	}
+	
 	private static int getTotalUtxoSum(Transaction t) {
 		int sum = 0;
 		for (UTXO utxo : t.utxos) {
@@ -284,7 +311,6 @@ public class Transaction {
 	public static String printAllTransactionNotCommited(BlockChain bc, boolean verboseMode) {
 		StringBuilder sb = new StringBuilder();
 		Iterator itr = bc.currentBlock.entrySet().iterator();
-		boolean firstTransaction = true;
 		while (itr.hasNext()) {
 			Map.Entry curr = (Map.Entry) itr.next();
 			Transaction ct = (Transaction) curr.getValue();

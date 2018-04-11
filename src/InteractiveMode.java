@@ -5,11 +5,19 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+import java.util.Base64;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class InteractiveMode {
 
@@ -102,19 +110,36 @@ public class InteractiveMode {
 				break;
 			case "O":
 				System.out.println(Transaction.printAllCurrentTransactionWithSignature(bc, verboseMode));
-				addCurrentBlockToBlockChain(bc);
+				try {
+					addCurrentBlockToBlockChain(bc);
+				} catch (Exception e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
 				break;
 			case "C":
 				//TODO
 				System.out.println("Supply <transactionID>");
 				String transactionId = br.readLine();
 				try {
-					printGoodOrBadTransaction(transactionId, bc);
-				}
+					if(bc.block.containsKey(transactionId)) {
+						if(verifyAccountNames(transactionId,bc)) {
+						printGoodOrBadTransaction(transactionId, bc);
+						}
+						else {
+							Transaction t = bc.block.get(transactionId);
+							System.out.println("Bad");
+							System.out.println("Multiple Input Accounts!");
+						}
+					}
+					else {
+						System.out.println("Bad");
+						System.out.println("Transaction ID does not exsist!");
+					}
+				}		
 				catch(Exception e) {
 					System.out.println(e);
 				}
-				System.out.println("supply <transactionID>. The signature of the signed transaction (in the two-line format given above) shall be checked. Output “OK” to stdout if good, else output “Bad” to stdout. If bad, output additional diagnostic information to stderr. ");
 				break;
 			case "R":
 				//TODO
@@ -125,7 +150,7 @@ public class InteractiveMode {
 					String [] temp = line.split(" ");
 					accountName = temp[0];
 					keyFileName = temp [1];
-					readKeyFile(fileName, accountName,bc);
+					readKeyFile(keyFileName, accountName,bc);
 					System.out.println("Key: Public key "+accountName+" "+fileName+" read");
 				}
 				catch(Exception e) {
@@ -144,34 +169,40 @@ public class InteractiveMode {
 	}
 
 	private void readKeyFile(String fileName, String accountName, BlockChain bc) throws Exception {
-		// Problems include invalid account name (syntactic error), and various errors opening and"
-		//		+ "reading the file that is supposed to contain the key.\n");
-		if(!bc.wallet.containsKey(accountName)) {
-			throw new Exception("Invalid Account Name!");
-		}
-		BufferedReader br = null;
-		br = new BufferedReader(new FileReader(fileName));
-		String line = "";
-		while ((line = br.readLine())!= null) {
-				line = line.replace("//s+", "");
-				bc.wallet.get(accountName).publicKey = line;
-			}
-		br.close();
+		String pubKey =  Files.lines(Paths.get(fileName)).collect(Collectors.joining("\n"));
+		if(!bc.wallet.containsKey(accountName)) 
+			bc.wallet.put(accountName, new WalletClass(accountName,0));
+		bc.wallet.get(accountName).publicKey = pubKey;
 	}
-
+			
 	private void printGoodOrBadTransaction(String transactionId, BlockChain bc) throws Exception {
-		// TODO Auto-generated method stub
 		if(!bc.block.containsKey(transactionId)) {
 			throw new Exception("Error: Transaction ID does not exist.");
 		}
 		try {
+		String accountName="";
+		//get account Name from first old transaction
+		Transaction currT = bc.block.get(transactionId);
+		if(currT.oldts.size()>0) {
+			OldTransaction oldT = currT.oldts.get(0);
+			Transaction prevT = bc.block.get(oldT.txid); //can take any one prevT
+			int pos = oldT.pos;
+			UTXO prevUtxo = prevT.utxos.get(pos);
+			accountName = prevUtxo.account;
+		}
+		else {
+			accountName ="Alice"; //hardcoding genisis transaction as Alice
+		}
+
 		String transaction = bc.block.get(transactionId).toString();
 		String signature = bc.block.get(transactionId).signature;
-		String pubKy = bc.wallet.get(transactionId).publicKey;
-		System.out.println(transaction);
-		System.out.println(signature);
-		if(isCorrectSignature(transaction,signature,pubKy, bc))
-			System.out.println("OK");
+		String pubKy = "";
+		if(bc.wallet.get(accountName)!=null)
+			 pubKy = bc.wallet.get(accountName).publicKey;
+		SHA256RSA obj = new SHA256RSA();
+		if(pubKy==null||signature==null||transaction==null||pubKy.length()<8||signature.length()<8||transaction.length()<8)
+			throw new Exception("Public Key Not Avaible for User!");
+		obj.verify(pubKy, signature, transaction.substring(10));
 		}
 		catch(Exception e) {
 			System.out.println("Bad");
@@ -180,26 +211,23 @@ public class InteractiveMode {
 		
 	}
 
-	private boolean isCorrectSignature(String transaction, String signature, String pubKy, BlockChain bc) throws Exception {
-		SHA256RSA obj  = new SHA256RSA();
-		return obj.decrptMessage(signature,pubKy).equals(transaction.substring(9));
-
-	}
-
-
-	private void addCurrentBlockToBlockChain(BlockChain bc) {
+	private void addCurrentBlockToBlockChain(BlockChain bc) throws Exception {
 		if(!bc.currentBlock.isEmpty()) {
 		Iterator itr = bc.currentBlock.entrySet().iterator();
-		boolean firstTransaction = true;
 		Block newBlock = new Block();
 		List<String> txidsToRemove = new LinkedList<String>();
+		SHA256RSA obj = new SHA256RSA();
 		while (itr.hasNext()) {
 			Map.Entry curr = (Map.Entry) itr.next();
 			Transaction ct = (Transaction) curr.getValue();
-			if(ct.signature!=null && ct.signature.length()>2) {
-				newBlock.transactionIds.add(ct.txid);
-				txidsToRemove.add(ct.txid);
-				Transaction.updateWallet(ct,bc);
+			String accountName = getAccountNameFromTXID(ct.txid,bc);
+			if(bc.wallet.containsKey(accountName) && SHA256RSA.verifyFromTransaction(bc.wallet.get(accountName).publicKey,ct.signature,ct.toString().substring(10))) {
+				Transaction.updateSignatureValidFlag(ct,bc);
+				if(ct.signature!=null && ct.signature.length()>2 &&ct.validSignature) {
+					newBlock.transactionIds.add(ct.txid);
+					txidsToRemove.add(ct.txid);
+					Transaction.updateWallet(ct,bc);
+				}
 			}
 		}
 		while(!txidsToRemove.isEmpty())
@@ -262,7 +290,53 @@ public class InteractiveMode {
 	private boolean isTransaction(String signature) {
 		return signature!=null && signature.length()>8 && (signature.charAt(8)==';');
 	}
+	
+	static String getAccountNameFromTXID(String txid, BlockChain bc) throws Exception {
+		if(!bc.block.containsKey(txid)) {
+			throw new Exception("Error: Transaction ID does not exist.");
+		}
+		//get account Name from first old TransactionClass
+		Transaction currT = bc.block.get(txid);
+		if(currT.oldts.size()>0) {
+		OldTransaction oldT = currT.oldts.get(0);
+		Transaction prevT = bc.block.get(oldT.txid); //can take any one prevT
+		int pos = oldT.pos;
+		UTXO prevUtxo = prevT.utxos.get(pos);
+		String accountName = prevUtxo.account;
+		return accountName;
+		}
+		else
+			return "Alice";
+	}
+	
+	static boolean verifyAccountNames(String txid, BlockChain bc) throws Exception {
+		if(!bc.block.containsKey(txid)) {
+			throw new Exception("Error: Transaction ID does not exist.");
+		}
+		//get account Name from first old TransactionClass
+		Transaction currT = bc.block.get(txid);
+		Transaction prevT;
+		OldTransaction oldT;
+		int pos;
+		UTXO prevUtxo;
+		String accountName="",prevAccountName="";
+		for(int i = 0;i<currT.M;i++) {
+			 oldT = currT.oldts.get(i);
+			 prevT = bc.block.get(oldT.txid); //can take any one prevT
+			 pos = oldT.pos;
+			 prevUtxo = prevT.utxos.get(pos);
+			 accountName = prevUtxo.account;
+			if(i!=0 && prevAccountName!=accountName)
+					return false;
+			 prevAccountName = accountName;
+			 
+		}
+		return true;
+	}
+
 
 }
+
+
 
 // /Users/devyash/eclipse-workspace/SimplifiedBitcoin/transactions.txt
