@@ -19,6 +19,5 @@ Instruction
 - To run the transaction block `java txlbk`.
 - To run the wallet `java wallet` in another terminal.
 - type `I` to turn on the interative mode.
--
--
-- For any help related to this project. Please email me at devyashsanghai@gmail.com
+
+For any help related to this project. Please email me at devyashsanghai@gmail.com
